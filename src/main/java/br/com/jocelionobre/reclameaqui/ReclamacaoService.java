@@ -1,26 +1,18 @@
-
 package br.com.jocelionobre.reclameaqui;
 
-import br.com.jocelionobre.reclameaqui.infrasctructure.client.TitleGeneratorClient;
 import io.quarkus.panache.common.Page;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
+import jakarta.validation.Valid;
 
 import java.util.List;
-
 
 @ApplicationScoped
 public class ReclamacaoService {
 
-    @Inject
-    @RestClient
-    TitleGeneratorClient titleGeneratorClient;
-
     public List<Reclamacao> listar(String filtro, int pagina, int tamanhoPagina) {
         if (filtro != null && !filtro.isEmpty()) {
-            return Reclamacao.find("lower(title) like lower(?1) or lower(description) like lower(?1)", "%" + filtro + "%")
+            return Reclamacao.find("lower(descricao) like lower(?1) or lower(cliente) like lower(?1)", "%" + filtro + "%")
                     .page(Page.of(pagina, tamanhoPagina)).list();
         }
         return Reclamacao.findAll().page(Page.of(pagina, tamanhoPagina)).list();
@@ -31,31 +23,36 @@ public class ReclamacaoService {
     }
 
     @Transactional
-    public void criar(Reclamacao reclamacao) {
-        if (reclamacao.getTitle() == null || reclamacao.getTitle().isBlank()) {
-            List<String> response = titleGeneratorClient.generate("all-meat", 1, 1);
-            if (response != null && !response.isEmpty()) {
-                reclamacao.setTitle(response.get(0));
-            }
+    public Reclamacao registrarReclamacao(Reclamacao reclamacao) {
+        if (reclamacao.getDescricao() == null || reclamacao.getDescricao().isBlank()) {
+            throw new IllegalArgumentException("Descrição não pode ser vazia");
         }
         Reclamacao.persist(reclamacao);
+        return reclamacao;
     }
 
     @Transactional
-    public Reclamacao atualizar(Long id, Reclamacao reclamacao) {
+    public Reclamacao atualizarStatus(Long id, Status novoStatus) {
         Reclamacao existente = buscar(id);
         if (existente != null) {
-            existente.setTitle(reclamacao.getTitle());
-            existente.setDescription(reclamacao.getDescription());
-            existente.setLocale(reclamacao.getLocale());
-            existente.setCompany(reclamacao.getCompany());
+            if (novoStatus == Status.EM_ANALISE && existente.getStatus() == Status.ABERTA) {
+                existente.setStatus(Status.EM_ANALISE);
+            } else if (novoStatus == Status.RESOLVIDA && existente.getStatus() == Status.EM_ANALISE) {
+                existente.setStatus(Status.RESOLVIDA);
+            } else {
+                throw new IllegalStateException("Transição de status inválida");
+            }
         }
         return existente;
     }
 
-    @Transactional
+    public void criar(@Valid Reclamacao reclamacao) {
+    }
+
+    public Reclamacao atualizar(Long id, Reclamacao reclamacao) {
+        return reclamacao;
+    }
+
     public void deletar(Long id) {
-        Reclamacao.deleteById(id);
     }
 }
-
